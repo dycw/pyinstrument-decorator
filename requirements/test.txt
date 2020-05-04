@@ -1,0 +1,6 @@
+-r core.txt
+
+pytest <= 5.3  # https://github.com/pytest-dev/pytest/issues/6925
+pytest-cov
+pytest-randomly
+pytest-xdist == 1.29
