@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import webbrowser
-from contextlib import ContextDecorator, contextmanager
+from contextlib import ContextDecorator
+from contextlib import contextmanager
 from functools import wraps
 from pathlib import Path
-from typing import Any, Generator
+from typing import Any
 from typing import Callable
+from typing import Generator
 from typing import Optional
 from typing import TypeVar
 from typing import Union
@@ -31,7 +33,6 @@ class WrappedProfiler:
         self._path = path
         self._overwrite = overwrite
 
-
     def __enter__(self: WrappedProfiler) -> WrappedProfiler:
         self._profiler = Profiler()
         self._profiler.__enter__()
@@ -47,7 +48,7 @@ class WrappedProfiler:
                     fh.write(self._profiler.output_html())
         return False
 
-    def open(self: WrappedProfiler) -> None:
+    def open(self: WrappedProfiler) -> None:  # noqa: A003
         webbrowser.open(str(Path(self._path).resolve()))
 
 
@@ -68,43 +69,24 @@ class ProfileMeta(ContextDecorator, type):
         html: bool = False,
         path: Union[Path, str] = _DEFAULT_PATH,
         overwrite: bool = True,
-    ) -> Union[WrappedProfiler, Callable[..., T]]:
+    ) -> Union[Generator[WrappedProfiler, None, None], Callable[..., T]]:
         wrapped = WrappedProfiler(html=html, path=path, overwrite=overwrite)
         if func is None:
+
             @contextmanager
             def core_profiler() -> Generator[WrappedProfiler, None, None]:
                 with wrapped as cm:
                     yield cm
-                # with Profiler() as profiler:
-                #     yield
-                # print(_trim_output_text(profiler.output_text(unicode=True, color=True)))
-                # if html:
-                #     path_obj = Path(path).with_suffix(".html")
-                #     with atomic_write_path(path_obj, overwrite=overwrite) as temp:
-                #         with open(temp, mode="w") as fh:
-                #             fh.write(profiler.output_html())
 
             return core_profiler()
-            # return wrapped
         else:
 
-            def newfunc():
-                @wraps(func)
-                def arst(*args, html=False, **kwargs):
-                    if html:
-                        breakpoint()
-                    with wrapped:
-                        return func(*args, **kwargs)
-
-                return arst
-
-            return newfunc()
             @wraps(func)
-            def new_func(*args: Any, **kwargs: Any) -> T:
+            def profiled_func(*args: Any, **kwargs: Any) -> T:
                 with wrapped:
                     return func(*args, **kwargs)
 
-            return new_func
+            return profiled_func
 
     def __enter__(cls: ProfileMeta) -> ProfileMeta:
         cls._wrapped_profiler = WrappedProfiler()
@@ -115,14 +97,8 @@ class ProfileMeta(ContextDecorator, type):
         cls._wrapped_profiler.__exit__(exc_type, exc_val, exc_tb)
         return False
 
-    def open(cls: ProfileMeta):
-        pass
-
 
 class profile(ContextDecorator, metaclass=ProfileMeta):
-    def __call__(self, *args, **kwargs):
-        raise NotImplementedError("arst")
-
     def __enter__(self: profile) -> profile:
         self._wrapped_profiler = WrappedProfiler()
         self._wrapped_profiler.__enter__()
