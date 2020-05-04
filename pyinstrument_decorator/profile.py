@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import webbrowser
-from contextlib import ContextDecorator
+from contextlib import ContextDecorator, contextmanager
 from functools import wraps
 from pathlib import Path
-from typing import Any
+from typing import Any, Generator
 from typing import Callable
 from typing import Optional
 from typing import TypeVar
@@ -31,10 +31,6 @@ class WrappedProfiler:
         self._path = path
         self._overwrite = overwrite
 
-    def __call__(self, func, *args, **kwargs):
-        with self:
-            return func(*args, *kwargs)
-        raise NotImplementedError(func, args, kwargs)
 
     def __enter__(self: WrappedProfiler) -> WrappedProfiler:
         self._profiler = Profiler()
@@ -75,9 +71,34 @@ class ProfileMeta(ContextDecorator, type):
     ) -> Union[WrappedProfiler, Callable[..., T]]:
         wrapped = WrappedProfiler(html=html, path=path, overwrite=overwrite)
         if func is None:
-            return wrapped
+            @contextmanager
+            def core_profiler() -> Generator[WrappedProfiler, None, None]:
+                with wrapped as cm:
+                    yield cm
+                # with Profiler() as profiler:
+                #     yield
+                # print(_trim_output_text(profiler.output_text(unicode=True, color=True)))
+                # if html:
+                #     path_obj = Path(path).with_suffix(".html")
+                #     with atomic_write_path(path_obj, overwrite=overwrite) as temp:
+                #         with open(temp, mode="w") as fh:
+                #             fh.write(profiler.output_html())
+
+            return core_profiler()
+            # return wrapped
         else:
 
+            def newfunc():
+                @wraps(func)
+                def arst(*args, html=False, **kwargs):
+                    if html:
+                        breakpoint()
+                    with wrapped:
+                        return func(*args, **kwargs)
+
+                return arst
+
+            return newfunc()
             @wraps(func)
             def new_func(*args: Any, **kwargs: Any) -> T:
                 with wrapped:
