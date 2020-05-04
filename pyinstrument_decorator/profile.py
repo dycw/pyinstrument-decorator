@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import webbrowser
 from contextlib import ContextDecorator
 from functools import wraps
 from pathlib import Path
@@ -30,6 +31,11 @@ class WrappedProfiler:
         self._path = path
         self._overwrite = overwrite
 
+    def __call__(self, func, *args, **kwargs):
+        with self:
+            return func(*args, *kwargs)
+        raise NotImplementedError(func, args, kwargs)
+
     def __enter__(self: WrappedProfiler) -> WrappedProfiler:
         self._profiler = Profiler()
         self._profiler.__enter__()
@@ -44,6 +50,18 @@ class WrappedProfiler:
                 with open(temp, mode="w") as fh:
                     fh.write(self._profiler.output_html())
         return False
+
+    def open(self: WrappedProfiler) -> None:
+        webbrowser.open(str(Path(self._path).resolve()))
+
+
+def _trim_output_text(text: str) -> str:
+    lines = (
+        CIterable(text.splitlines())
+        .dropwhile(lambda x: not x.startswith("Program:"))[1:]
+        .dropwhile(lambda x: x == "")
+    )
+    return "\n".join(lines)
 
 
 class ProfileMeta(ContextDecorator, type):
@@ -61,11 +79,11 @@ class ProfileMeta(ContextDecorator, type):
         else:
 
             @wraps(func)
-            def wrapped(*args: Any, **kwargs: Any) -> T:
+            def new_func(*args: Any, **kwargs: Any) -> T:
                 with wrapped:
                     return func(*args, **kwargs)
 
-            return wrapped
+            return new_func
 
     def __enter__(cls: ProfileMeta) -> ProfileMeta:
         cls._wrapped_profiler = WrappedProfiler()
@@ -76,8 +94,14 @@ class ProfileMeta(ContextDecorator, type):
         cls._wrapped_profiler.__exit__(exc_type, exc_val, exc_tb)
         return False
 
+    def open(cls: ProfileMeta):
+        pass
+
 
 class profile(ContextDecorator, metaclass=ProfileMeta):
+    def __call__(self, *args, **kwargs):
+        raise NotImplementedError("arst")
+
     def __enter__(self: profile) -> profile:
         self._wrapped_profiler = WrappedProfiler()
         self._wrapped_profiler.__enter__()
@@ -86,12 +110,3 @@ class profile(ContextDecorator, metaclass=ProfileMeta):
     def __exit__(self: profile, exc_type: Any, exc_val: Any, exc_tb: Any) -> Any:
         self._wrapped_profiler.__exit__(exc_type, exc_val, exc_tb)
         return False
-
-
-def _trim_output_text(text: str) -> str:
-    lines = (
-        CIterable(text.splitlines())
-        .dropwhile(lambda x: not x.startswith("Program:"))[1:]
-        .dropwhile(lambda x: x == "")
-    )
-    return "\n".join(lines)
